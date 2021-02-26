@@ -1058,7 +1058,7 @@ public:
       ZeroMemory(&wc, sizeof(WNDCLASSEX));
       wc.cbSize = sizeof(WNDCLASSEX);
       wc.hInstance = hInstance;
-      wc.lpszClassName = "webview";
+      wc.lpszClassName = L"webview";
       wc.hIcon = icon;
       wc.hIconSm = icon;
       wc.lpfnWndProc =
@@ -1093,7 +1093,7 @@ public:
             return 0;
           });
       RegisterClassEx(&wc);
-      m_window = CreateWindow("webview", "", WS_OVERLAPPEDWINDOW, CW_USEDEFAULT,
+      m_window = CreateWindow(L"webview", L"", WS_OVERLAPPEDWINDOW, CW_USEDEFAULT,
                               CW_USEDEFAULT, 640, 480, nullptr, nullptr,
                               GetModuleHandle(nullptr), nullptr);
       SetWindowLongPtr(m_window, GWLP_USERDATA, (LONG_PTR)this);
@@ -1142,7 +1142,7 @@ public:
   }
 
   void set_title(const std::string title) {
-    SetWindowText(m_window, title.c_str());
+    SetWindowTextA(m_window, title.c_str());
   }
 
   void set_size(int width, int height, int hints) {
