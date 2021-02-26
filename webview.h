@@ -1103,7 +1103,7 @@ public:
       UpdateWindow(m_window);
       SetFocus(m_window);
     } else {
-      m_window = *(static_cast<HWND *>(window));
+      m_window = static_cast<HWND>(window);
     }
 
     auto cb =
@@ -1180,6 +1180,11 @@ public:
   void navigate(const std::string url) { m_browser->navigate(url); }
   void eval(const std::string js) { m_browser->eval(js); }
   void init(const std::string js) { m_browser->init(js); }
+
+  void *handle() {
+      // Not used on Windows.
+      return nullptr;
+  }
 
 private:
   virtual void on_message(const std::string msg) = 0;
