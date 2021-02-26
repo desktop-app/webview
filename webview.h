@@ -1097,14 +1097,14 @@ public:
                               CW_USEDEFAULT, 640, 480, nullptr, nullptr,
                               GetModuleHandle(nullptr), nullptr);
       SetWindowLongPtr(m_window, GWLP_USERDATA, (LONG_PTR)this);
+
+      SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE);
+      ShowWindow(m_window, SW_SHOW);
+      UpdateWindow(m_window);
+      SetFocus(m_window);
     } else {
       m_window = *(static_cast<HWND *>(window));
     }
-
-    SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE);
-    ShowWindow(m_window, SW_SHOW);
-    UpdateWindow(m_window);
-    SetFocus(m_window);
 
     auto cb =
         std::bind(&win32_edge_engine::on_message, this, std::placeholders::_1);
@@ -1114,7 +1114,7 @@ public:
       m_browser->embed(m_window, debug, cb);
     }
 
-    m_browser->resize(m_window);
+    resize_to_window();
   }
 
   void run() {
@@ -1171,6 +1171,10 @@ public:
           SWP_NOZORDER | SWP_NOACTIVATE | SWP_NOMOVE | SWP_FRAMECHANGED);
       m_browser->resize(m_window);
     }
+  }
+
+  void resize_to_window() {
+      m_browser->resize(m_window);
   }
 
   void navigate(const std::string url) { m_browser->navigate(url); }
