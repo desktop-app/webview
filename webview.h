@@ -531,6 +531,9 @@ public:
                                    NULL, NULL);
   }
 
+  void resize_to_window() {
+  }
+
 private:
   virtual void on_message(const std::string msg) = 0;
   GtkWidget *m_window;
@@ -577,6 +580,8 @@ id operator"" _str(const char *s, std::size_t) {
       "NSString"_cls, "stringWithUTF8String:"_sel, s);
 }
 
+Class delegateClass();
+
 class cocoa_wkwebview_engine {
 public:
   cocoa_wkwebview_engine(bool debug, void *window) {
@@ -587,23 +592,7 @@ public:
         app, "setActivationPolicy:"_sel, NSApplicationActivationPolicyRegular);
 
     // Delegate
-    auto cls =
-        objc_allocateClassPair((Class) "NSResponder"_cls, "AppDelegate", 0);
-    class_addProtocol(cls, objc_getProtocol("NSTouchBarProvider"));
-    class_addMethod(cls, "applicationShouldTerminateAfterLastWindowClosed:"_sel,
-                    (IMP)(+[](id, SEL, id) -> BOOL { return 1; }), "c@:@");
-    class_addMethod(cls, "userContentController:didReceiveScriptMessage:"_sel,
-                    (IMP)(+[](id self, SEL, id, id msg) {
-                      auto w =
-                          (cocoa_wkwebview_engine *)objc_getAssociatedObject(
-                              self, "webview");
-                      assert(w);
-                      w->on_message(((const char *(*)(id, SEL))objc_msgSend)(
-                          ((id(*)(id, SEL))objc_msgSend)(msg, "body"_sel),
-                          "UTF8String"_sel));
-                    }),
-                    "v@:@@");
-    objc_registerClassPair(cls);
+    auto cls = delegateClass();
 
     auto delegate = ((id(*)(id, SEL))objc_msgSend)((id)cls, "new"_sel);
     objc_setAssociatedObject(delegate, "webview", (id)this,
@@ -619,7 +608,9 @@ public:
               m_window, "initWithContentRect:styleMask:backing:defer:"_sel,
               CGRectMake(0, 0, 0, 0), 0, NSBackingStoreBuffered, 0);
     } else {
-      m_window = (id)window;
+      // We'll embed webview in QWindow by hand.
+      //m_window = (id)window;
+      m_window = 0;
     }
 
     // Webview
@@ -681,13 +672,16 @@ public:
                         },
                       };
                      )script");
-    ((void (*)(id, SEL, id))objc_msgSend)(m_window, "setContentView:"_sel,
-                                          m_webview);
-    ((void (*)(id, SEL, id))objc_msgSend)(m_window, "makeKeyAndOrderFront:"_sel,
-                                          nullptr);
+    if (m_window) {
+      ((void (*)(id, SEL, id))objc_msgSend)(m_window, "setContentView:"_sel,
+                                            m_webview);
+      ((void (*)(id, SEL, id))objc_msgSend)(m_window, "makeKeyAndOrderFront:"_sel,
+                                            nullptr);
+    }
   }
   ~cocoa_wkwebview_engine() { close(); }
   void *window() { return (void *)m_window; }
+  void *handle() { return (void *)m_webview; }
   void terminate() {
     close();
     ((void (*)(id, SEL, id))objc_msgSend)("NSApp"_cls, "terminate:"_sel,
@@ -711,12 +705,18 @@ public:
                      }));
   }
   void set_title(const std::string title) {
+    if (!m_window) {
+      return;
+    }
     ((void (*)(id, SEL, id))objc_msgSend)(
         m_window, "setTitle:"_sel,
         ((id(*)(id, SEL, const char *))objc_msgSend)(
             "NSString"_cls, "stringWithUTF8String:"_sel, title.c_str()));
   }
   void set_size(int width, int height, int hints) {
+    if (!m_window) {
+      return;
+    }
     auto style = NSWindowStyleMaskTitled | NSWindowStyleMaskClosable |
                  NSWindowStyleMaskMiniaturizable;
     if (hints != WEBVIEW_HINT_FIXED) {
@@ -769,13 +769,41 @@ public:
         nullptr);
   }
 
+  void resize_to_window() {
+  }
+
 private:
+  friend Class delegateClass();
   virtual void on_message(const std::string msg) = 0;
   void close() { ((void (*)(id, SEL))objc_msgSend)(m_window, "close"_sel); }
   id m_window;
   id m_webview;
   id m_manager;
 };
+
+Class delegateClass() {
+  static Class cls = 0;
+  if (cls) {
+    return cls;
+  }
+  cls = objc_allocateClassPair((Class) "NSResponder"_cls, "AppDelegate", 0);
+  class_addProtocol(cls, objc_getProtocol("NSTouchBarProvider"));
+  class_addMethod(cls, "applicationShouldTerminateAfterLastWindowClosed:"_sel,
+                  (IMP)(+[](id, SEL, id) -> BOOL { return 1; }), "c@:@");
+  class_addMethod(cls, "userContentController:didReceiveScriptMessage:"_sel,
+                  (IMP)(+[](id self, SEL, id, id msg) {
+                    auto w =
+                      (cocoa_wkwebview_engine *)objc_getAssociatedObject(
+                        self, "webview");
+                    assert(w);
+                    w->on_message(((const char *(*)(id, SEL))objc_msgSend)(
+                        ((id(*)(id, SEL))objc_msgSend)(msg, "body"_sel),
+                        "UTF8String"_sel));
+                  }),
+                  "v@:@@");
+  objc_registerClassPair(cls);
+  return cls;
+}
 
 using browser_engine = cocoa_wkwebview_engine;
 
@@ -1208,6 +1236,7 @@ class webview : public browser_engine {
 public:
   webview(bool debug = false, void *wnd = nullptr)
       : browser_engine(debug, wnd) {}
+  virtual ~webview() = default;
 
   void navigate(const std::string url) {
     if (url == "") {
